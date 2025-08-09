@@ -11,6 +11,8 @@ from hls4ml.backends.catapult.catapult_backend import CatapultBackend  # isort: 
 
 from hls4ml.backends.vitis.vitis_backend import VitisBackend  # isort: skip
 
+
+
 register_backend('Vivado', VivadoBackend)
 register_backend('VivadoAccelerator', VivadoAcceleratorBackend)
 register_backend('Vitis', VitisBackend)
