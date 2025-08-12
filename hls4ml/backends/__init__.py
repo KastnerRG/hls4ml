@@ -11,12 +11,13 @@ from hls4ml.backends.catapult.catapult_backend import CatapultBackend  # isort: 
 
 from hls4ml.backends.vitis.vitis_backend import VitisBackend  # isort: skip
 
-
+from hls4ml.backends.aie.aie_backend import AIEBackend  # isort: skip
 
 register_backend('Vivado', VivadoBackend)
 register_backend('VivadoAccelerator', VivadoAcceleratorBackend)
 register_backend('Vitis', VitisBackend)
 register_backend('Quartus', QuartusBackend)
+register_backend('AIE', AIEBackend)
 register_backend('Catapult', CatapultBackend)
 register_backend('SymbolicExpression', SymbolicExpressionBackend)
 register_backend('oneAPI', OneAPIBackend)
