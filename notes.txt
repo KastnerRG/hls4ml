@@ -1,0 +1,16 @@
+Valid reuse factor for 96*96 dense
+
+1,2,3,4,6,8,12,16,24,32,48,96,192,288,384,576,768,1152,1536,2304,3072,4608,9216.
+
+conda activate hls4ml-vek280 && python dense_exp/scale-dense-db.py --reuse-factor 32 --layers 4
+
+conda activate hls4ml-vek280 && python dense_exp/scale-dense-hls4ml.py --in-size 96 --out-size 96 --reuse-factor 1 --layers 1 --strategy latency
+
+
+conda activate hls4ml-vek280 && python dense_exp/scale-dense-hls4ml.py --in-size 96 --out-size 96 --reuse-factor 1 --layers 1 --strategy resource
+
+
+conda activate hls4ml-vek280 && python dense_exp/scale-dense-hls4ml.py --strategy latency --reuse-factor 12 --layers 5
+
+conda activate hls4ml-vek280 && python dense_exp/scale-dense-hls4ml.py --strategy resource --reuse-factor 2 --layers 2
+

@@ -1,0 +1,20 @@
+name: hls4ml-vek280
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - pyyaml=6.0.3
+  - setuptools>=61
+  - wheel
+  - pip:
+      - numpy==1.26.4
+      - h5py==3.16.0
+      - keras==2.15.0
+      - tensorflow==2.15.1
+      - tensorflow-model-optimization==0.7.5
+      - qkeras==0.9.0
+      - pyparsing==3.2.5
+      - quantizers==1.2.2
+      - pydigitalwavetools==1.1
+      - -e .

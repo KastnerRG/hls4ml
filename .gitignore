@@ -15,3 +15,11 @@ hls4mlprj_*
 *~
 *.ipynb_checkpoints/
 *.bak
+*_prj
+*_result
+*_result_old
+tb_data
+dense_plot
+logs
+tmp
+tmp2
