@@ -23,3 +23,9 @@ dense_plot
 logs
 tmp
 tmp2
+pics
+*.pdf
+notes.txt
+*.csv
+*.bib
+.codex

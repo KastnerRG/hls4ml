@@ -214,13 +214,13 @@ def time_block(fn, *args, **kwargs):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--in-size', type=int, default=96)
-    parser.add_argument('--out-size', type=int, default=96)
+    parser.add_argument('--in-size', type=int, default=128)
+    parser.add_argument('--out-size', type=int, default=128)
     parser.add_argument('--reuse-factor', type=int, default=1)
     parser.add_argument('--layers', type=int, default=1)
     parser.add_argument('--strategy', default='Resource')
     parser.add_argument('--part', default='xcve2802-vsvh1760-2MP-e-S')
-    parser.add_argument('--clock-period', type=float, default=5.0)
+    parser.add_argument('--clock-period', type=float, default=3.2)
     parser.add_argument('--cosim', dest='cosim', action='store_true', default=True)
     parser.add_argument('--no-cosim', dest='cosim', action='store_false')
     parser.add_argument('--vsynth', dest='vsynth', action='store_true', default=True)

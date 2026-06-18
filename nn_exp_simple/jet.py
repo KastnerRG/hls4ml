@@ -103,12 +103,12 @@ def copy_result_artifacts(output_dir, result_dir, proj_name, vsynth, cosim):
         copy_if_exists(output_dir / 'vivado_synth.rpt', result_dir / f'{proj_name}_vsynth.rpt')
 
 
-def prepare_testbench_data(model, proj_name, input_size):
+def prepare_testbench_data(model, proj_name):
     tb_dir = BASE_DIR / 'tb_data'
     tb_dir.mkdir(parents=True, exist_ok=True)
 
-    rng = np.random.default_rng(4343)
-    tb_input = rng.uniform(-1.0, 1.0, size=(TB_SAMPLES, input_size)).astype(np.float32)
+    rng = np.random.default_rng(2026)
+    tb_input = rng.uniform(-1.0, 1.0, size=(TB_SAMPLES, 16)).astype(np.float32)
     tb_output = model.predict(tb_input, verbose=0)
 
     input_path = tb_dir / f'{proj_name}_input.npy'
@@ -118,128 +118,60 @@ def prepare_testbench_data(model, proj_name, input_size):
     return input_path, output_path
 
 
-def patch_dense_resource_rf2_128_case(output_dir, input_size, output_size, num_layers, reuse_factor):
-    if not ((input_size, output_size, reuse_factor) == (128, 128, 2) or (input_size, output_size, reuse_factor) == (160, 160, 2) or (input_size, output_size, reuse_factor) == (160, 160, 4)):
-        return
+def add_dense_relu(model, in_features, out_features, index):
+    dense_kwargs = {}
+    if index == 0:
+        dense_kwargs['input_shape'] = (in_features,)
 
-    dense_resource_path = output_dir / 'firmware/nnet_utils/nnet_dense_resource.h'
-    dense_text = dense_resource_path.read_text(encoding='utf-8')
-
-    old_loop = """ReuseLoop:
-    for (int ir = 0; ir < rufactor; ir++) {
-        #pragma HLS PIPELINE II=1 rewind
-
-        int w_index = ir;
-        int in_index = ir;
-        int out_index = 0;
-        int acc_step = 0;
-
-    MultLoop:
-        for (int im = 0; im < block_factor; im++) {
-            #pragma HLS UNROLL
-
-            acc[out_index] += static_cast<typename CONFIG_T::accum_t>(
-                CONFIG_T::template product<data_T, typename CONFIG_T::weight_t>::product(data[in_index], weights[w_index]));
-
-            // Increment w_index
-            w_index += rufactor;
-            // Increment in_index
-            in_index += rufactor;
-            if (in_index >= nin) {
-                in_index = ir;
-            }
-            // Increment out_index
-            if (acc_step + 1 >= multscale) {
-                acc_step = 0;
-                out_index++;
-            } else {
-                acc_step++;
-            }
-        }
-    }
-"""
-    new_loop = """ReuseLoop:
-    for (int ir = 0; ir < rufactor; ir++) {
-        #pragma HLS PIPELINE II=1 rewind
-    OutputLoop:
-        for (int out_index = 0; out_index < nout; out_index++) {
-            #pragma HLS UNROLL
-        MultLoop:
-            for (int im = 0; im < multscale; im++) {
-                #pragma HLS UNROLL
-                const int in_index = ir + im * rufactor;
-                const int w_index = out_index * nin + in_index;
-
-                acc[out_index] += static_cast<typename CONFIG_T::accum_t>(
-                    CONFIG_T::template product<data_T, typename CONFIG_T::weight_t>::product(data[in_index], weights[w_index]));
-            }
-        }
-    }
-"""
-
-    if old_loop not in dense_text:
-        raise RuntimeError(f'Could not find expected dense resource loop in {dense_resource_path}')
-
-    dense_resource_path.write_text(dense_text.replace(old_loop, new_loop, 1), encoding='utf-8')
-
-
-def build_cascade_model(input_size, output_size, num_layers):
-    model = Sequential()
     model.add(
-        QActivation(quantized_bits(BITS, INT), name="input_quant", input_shape=(input_size,)),
-    )
-    current_input = input_size
-    for i in range(num_layers):
-        dense_kwargs = {}
-
-        if i == 0:
-            dense_kwargs['input_shape'] = (current_input,)
-
-        model.add(
-            QDense(
-                output_size,
-                name=f'fc{i}',
-                kernel_quantizer=quantized_bits(BITS, INT, alpha=1),
-                bias_quantizer=quantized_bits(2 * BITS, 2 * INT, alpha=1),
-                kernel_initializer=RandomUniform(minval=-1, maxval=1, seed=np.random.randint(0, 100)),
-                bias_initializer=RandomUniform(minval=-1, maxval=1, seed=np.random.randint(0, 100)),
-                **dense_kwargs,
-            )
+        QDense(
+            out_features,
+            name=f'fc{index}',
+            kernel_quantizer=quantized_bits(BITS, INT, alpha=1),
+            bias_quantizer=quantized_bits(2 * BITS, 2 * INT, alpha=1),
+            kernel_initializer=RandomUniform(minval=-1, maxval=1, seed=np.random.randint(0, 100)),
+            bias_initializer=RandomUniform(minval=-1, maxval=1, seed=np.random.randint(0, 100)),
+            **dense_kwargs,
         )
-        model.add(QActivation(quantized_relu(BITS, INT), name=f'relu{i}'))
-        current_input = output_size
+    )
+    model.add(QActivation(quantized_relu(BITS, INT), name=f'relu{index}'))
+
+
+def build_jet_model():
+    model = Sequential(name='jet')
+    model.add(
+        QActivation(
+            quantized_bits(BITS, INT),
+            name='input_quant',
+            input_shape=(16,),
+        )
+    )
+
+    add_dense_relu(model, 16, 64, 0)
+    add_dense_relu(model, 64, 32, 1)
+    add_dense_relu(model, 32, 32, 2)
+    add_dense_relu(model, 32, 5, 3)
 
     return model
 
 
-def normalize_strategy(strategy):
-    value = strategy.strip().lower()
-    if value == 'resource':
-        return 'Resource', 'R'
-    if value == 'latency':
-        return 'Latency', 'L'
-    raise ValueError(f"Unsupported strategy '{strategy}'. Use 'Resource' or 'Latency'.")
-
-
-def run_scale_dense(IN_SIZE, OUT_SIZE, REUSE_FACTOR, NUM_LAYERS, PART, CLK_PERIOD, STRATEGY='Resource', VSYNTH=True, COSIM=True):
+def run_jet_model(REUSE_FACTOR, PART, CLK_PERIOD, VSYNTH=True, COSIM=True):
     seed = 0
     np.random.seed(seed)
     tf.random.set_seed(seed)
 
-    strategy_name, strategy_tag = normalize_strategy(STRATEGY)
     clock_tag = format_clock_tag(CLK_PERIOD)
-    proj_name = shell_safe_name(
-        f'dense_{strategy_tag}_in{IN_SIZE}_out{OUT_SIZE}_l{NUM_LAYERS}_rf{REUSE_FACTOR}_clk{clock_tag}'
-    )
-    output_dir = BASE_DIR / f'obbg_hls4ml_{strategy_tag}_prj' / proj_name
-    result_dir = BASE_DIR / f'obbg_hls4ml_{strategy_tag}_result' / proj_name
+    proj_name = shell_safe_name(f'jet_rf{REUSE_FACTOR}_clk{clock_tag}')
+    output_dir = BASE_DIR / 'nn_prj' / proj_name
+    result_dir = BASE_DIR / 'nn_result' / proj_name
 
-    model = build_cascade_model(IN_SIZE, OUT_SIZE, NUM_LAYERS)
+    model = build_jet_model()
 
     config = hls4ml.utils.config_from_keras_model(model, granularity='model', backend='Vitis')
     config['Model']['ReuseFactor'] = REUSE_FACTOR
-    config['Model']['Strategy'] = strategy_name
+    config['Model']['Strategy'] = 'Resource'
     config['Model']['Precision'] = f'ap_fixed<{BITS},{INT + 1}>'
+
     print('-----------------------------------')
     pprint.pprint(config, sort_dicts=False)
     print('-----------------------------------')
@@ -247,7 +179,7 @@ def run_scale_dense(IN_SIZE, OUT_SIZE, REUSE_FACTOR, NUM_LAYERS, PART, CLK_PERIO
     tb_input_path = None
     tb_output_path = None
     if COSIM:
-        tb_input_path, tb_output_path = prepare_testbench_data(model, proj_name, IN_SIZE)
+        tb_input_path, tb_output_path = prepare_testbench_data(model, proj_name)
 
     if output_dir.exists():
         shutil.rmtree(output_dir)
@@ -264,7 +196,6 @@ def run_scale_dense(IN_SIZE, OUT_SIZE, REUSE_FACTOR, NUM_LAYERS, PART, CLK_PERIO
         output_data_tb=str(tb_output_path) if tb_output_path is not None else None,
     )
     hls_model.write()
-    patch_dense_resource_rf2_128_case(output_dir, IN_SIZE, OUT_SIZE, NUM_LAYERS, REUSE_FACTOR)
     hls_model.build(csim=COSIM, synth=True, cosim=COSIM, validation=COSIM, vsynth=VSYNTH, log_to_stdout=False)
 
     copy_result_artifacts(output_dir, result_dir, proj_name, VSYNTH, COSIM)
@@ -280,11 +211,7 @@ def time_block(fn, *args, **kwargs):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--in-size', type=int, default=128)
-    parser.add_argument('--out-size', type=int, default=128)
     parser.add_argument('--reuse-factor', type=int, default=1)
-    parser.add_argument('--layers', type=int, default=1)
-    parser.add_argument('--strategy', default='Resource')
     parser.add_argument('--part', default='xcve2802-vsvh1760-2MP-e-S')
     parser.add_argument('--clock-period', type=float, default=3.2)
     parser.add_argument('--cosim', dest='cosim', action='store_true', default=True)
@@ -297,14 +224,10 @@ def parse_args():
 if __name__ == '__main__':
     args = parse_args()
     _, _ = time_block(
-        run_scale_dense,
-        IN_SIZE=args.in_size,
-        OUT_SIZE=args.out_size,
+        run_jet_model,
         REUSE_FACTOR=args.reuse_factor,
-        NUM_LAYERS=args.layers,
         PART=args.part,
         CLK_PERIOD=args.clock_period,
-        STRATEGY=args.strategy,
         VSYNTH=args.vsynth,
         COSIM=args.cosim,
     )

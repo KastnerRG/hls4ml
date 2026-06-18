@@ -12,5 +12,17 @@ conda activate hls4ml-vek280 && python dense_exp/scale-dense-hls4ml.py --in-size
 
 conda activate hls4ml-vek280 && python dense_exp/scale-dense-hls4ml.py --strategy latency --reuse-factor 12 --layers 5
 
-conda activate hls4ml-vek280 && python dense_exp/scale-dense-hls4ml.py --strategy resource --reuse-factor 2 --layers 2
+conda activate hls4ml-vek280 && python dense_exp/scale-dense-hls4ml.py --strategy resource --reuse-factor 16 --layers 5
 
+
+conda activate hls4ml-vek280 && python dense_exp/single-dense-hls4ml.py --in-size 96 --out-size 128 --reuse-factor 1
+
+
+conda activate hls4ml-vek280 && python dense_exp/scale-dense-hls4ml.py --in-size 128 --out-size 128 --reuse-factor 1024 --layers 4 --strategy latency
+conda activate hls4ml-vek280 && python dense_exp/scale-dense-hls4ml.py --in-size 128 --out-size 128 --reuse-factor 512 --layers 64 --strategy resource
+
+conda activate hls4ml-vek280 && python nn_exp/jet.py
+
+conda activate hls4ml-vek280 && python nn_exp/vae_large.py --reuse-factor 8
+
+conda activate hls4ml-vek280 && python nn_exp_simple/jet.py --reuse-factor 16
