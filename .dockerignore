@@ -1,0 +1,5 @@
+*
+!Dockerfile
+!environment-vek280.yml
+!docker/
+!docker/enter.sh
