@@ -29,3 +29,5 @@ notes.txt
 *.csv
 *.bib
 .codex
+*jet_data*
+*jet_train_runs*

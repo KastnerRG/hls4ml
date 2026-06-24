@@ -6,6 +6,15 @@ DOCNAV_ROOT ?= $(abspath $(VITIS_ROOT)/../DocNav)
 LICENSE_DIR ?= $(HOME)/Xilinx-lic
 LICENSE_SERVER ?= 2100@cselm2.ucsd.edu
 RF ?= 16
+SEED ?= 0
+EPOCHS ?= 50
+BATCH_SIZE ?= 1024
+LEARNING_RATE ?= 0.0002
+PART ?= xcve2802-vsvh1760-2MP-e-S
+CLK_PERIOD ?= 3.2
+COSIM ?= 1
+VSYNTH ?= 1
+RUN_NAME ?=
 HOST_UID := $(shell id -u)
 HOST_GID := $(shell id -g)
 HOST_USER := $(shell id -un)
@@ -15,7 +24,7 @@ XAUTHORITY ?= $(shell printenv XAUTHORITY)
 
 X11_ARGS := $(if $(DISPLAY),--env DISPLAY=$(DISPLAY) --env QT_X11_NO_MITSHM=1 --volume /tmp/.X11-unix:/tmp/.X11-unix:rw $(if $(wildcard $(XAUTHORITY)),--env XAUTHORITY=/tmp/.Xauthority --volume $(XAUTHORITY):/tmp/.Xauthority:ro))
 
-.PHONY: build start enter stop jet-simple
+.PHONY: build start enter stop jet-simple jet-train
 
 build:
 	$(DOCKER) build --tag $(IMAGE) .
@@ -57,6 +66,21 @@ enter: start
 jet-simple: start
 	@printf 'Running jet simple in %s with reuse factor %s\n' "$(CONTAINER)" "$(RF)"
 	@$(DOCKER) exec $(CONTAINER) /usr/local/bin/hls4ml-shell python nn_exp_simple/jet.py --reuse-factor $(RF)
+
+jet-train: start
+	@printf 'Running quantized jet training in %s with rf=%s seed=%s epochs=%s batch_size=%s\n' "$(CONTAINER)" "$(RF)" "$(SEED)" "$(EPOCHS)" "$(BATCH_SIZE)"
+	@$(DOCKER) exec $(CONTAINER) /usr/local/bin/hls4ml-shell \
+		python nn_exp_simple/jet_training.py \
+			--reuse-factor $(RF) \
+			--seed $(SEED) \
+			--epochs $(EPOCHS) \
+			--batch-size $(BATCH_SIZE) \
+			--learning-rate $(LEARNING_RATE) \
+			--part $(PART) \
+			--clock-period $(CLK_PERIOD) \
+			$(if $(RUN_NAME),--run-name $(RUN_NAME),) \
+			$(if $(filter 1 yes true,$(COSIM)),--cosim,--no-cosim) \
+			$(if $(filter 1 yes true,$(VSYNTH)),--vsynth,--no-vsynth)
 
 stop:
 	-$(DOCKER) rm -f $(CONTAINER)
